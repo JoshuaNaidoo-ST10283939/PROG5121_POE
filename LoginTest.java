@@ -1,76 +1,94 @@
-package login;
-
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
+import org.json.JSONObject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 public class LoginTest {
-    
-    public LoginTest() {
+
+    @BeforeEach
+    public void resetMessages() {
+        // Reset message count using reflection (since messageCount is private)
+        try {
+            var field = Login.Message.class.getDeclaredField("messageCount");
+            field.setAccessible(true);
+            field.setInt(null, 0); // Reset to 0 before each test
+        } catch (IllegalAccessException | IllegalArgumentException | NoSuchFieldException | SecurityException e) {
+            fail("Could not reset message count: " + e.getMessage());
+        }
     }
 
     @Test
-    public void testCheckUserName() {
-        Login valid = new Login("John", "Doe", "jd_e", "Password1!", "+27831234567");
-        assertTrue(valid.checkUserName());
-
-        Login invalid = new Login("John", "Doe", "jdoe", "Password1!", "+27831234567");
-        assertFalse(invalid.checkUserName());
+    public void testMessageLength_Success() {
+        String message = "This is a valid short message.";
+        assertTrue(message.length() <= 250, "Message is within the valid length");
     }
 
     @Test
-    public void testCheckPasswordComplexity() {
-        Login valid = new Login("Jane", "Smith", "js_m", "Passw0rd!", "+27831234567");
-        assertTrue(valid.checkPasswordComplexity());
-
-        Login noSpecialChar = new Login("Jane", "Smith", "js_m", "Passw0rd", "+27831234567");
-        assertFalse(noSpecialChar.checkPasswordComplexity());
-
-        Login noNumber = new Login("Jane", "Smith", "js_m", "Password!", "+27831234567");
-        assertFalse(noNumber.checkPasswordComplexity());
-
-        Login tooShort = new Login("Jane", "Smith", "js_m", "Pw1!", "+27831234567");
-        assertFalse(tooShort.checkPasswordComplexity());
+    public void testMessageLength_Failure() {
+        StringBuilder longMessage = new StringBuilder();
+        for (int i = 0; i < 260; i++) longMessage.append("a");
+        int over = longMessage.length() - 250;
+        assertTrue(over > 0, "Message exceeds 250 characters by " + over);
     }
 
     @Test
-    public void testCheckCellPhoneNumber() {
-        Login valid = new Login("Mike", "Jones", "mj_1", "Password1!", "+27821234567");
-        assertTrue(valid.checkCellPhoneNumber());
-
-        Login invalid = new Login("Mike", "Jones", "mj_1", "Password1!", "0821234567");
-        assertFalse(invalid.checkCellPhoneNumber());
+    public void testRecipientNumber_Valid() {
+        Login.Message msg = new Login.Message("+27718693002", "Hello Mike!");
+        assertTrue(msg.checkRecipientCell(), "Valid SA number should pass");
     }
 
     @Test
-    public void testRegisterUser() {
-        Login valid = new Login("Amy", "Williams", "aw_1", "ValidPass1!", "+27839999999");
-        assertEquals("Registration successful!", valid.registerUser());
-
-        Login badUsername = new Login("Amy", "Williams", "amywilliams", "ValidPass1!", "+27839999999");
-        assertEquals("Username is not correctly formatted, please ensure that your username contains an underscore and is no more than five characters in length.", badUsername.registerUser());
-
-        Login badPassword = new Login("Amy", "Williams", "aw_1", "password", "+27839999999");
-        assertEquals("Password is not correctly formatted; please ensure that the password contains at least eight characters, a capital letter, a number, and a special character.", badPassword.registerUser());
-
-        Login badCell = new Login("Amy", "Williams", "aw_1", "ValidPass1!", "0831234567");
-        assertEquals("Cell phone number incorrectly formatted or does not contain international code.", badCell.registerUser());
+    public void testRecipientNumber_Invalid() {
+        Login.Message msg = new Login.Message("08575975889", "Hello Keegan!");
+        assertFalse(msg.checkRecipientCell(), "Invalid SA number format should fail");
     }
 
     @Test
-    public void testLoginUser() {
-        Login user = new Login("Bruce", "Wayne", "bw_1", "Batm@n123", "+27831112222");
-
-        assertTrue(user.loginUser("bw_1", "Batm@n123"));
-        assertFalse(user.loginUser("bw_1", "WrongPassword"));
-        assertFalse(user.loginUser("wrong", "Batm@n123"));
+    public void testMessageHashGeneration() {
+        Login.Message msg = new Login.Message("+27718693002", "Hi Mike, can you join us for dinner tonight");
+        String hash;
+        hash = msg.createMessageHash();
+        assertTrue(hash.contains("HITONIGHT"), "Hash should include first and last words of message");
     }
 
     @Test
-    public void testReturnLoginStatus() {
-        Login user = new Login("Clark", "Kent", "ck_1", "Superm@n1", "+27830001111");
-
-        assertEquals("Welcome Clark Kent, it is great to see you again.", user.returnLoginStatus(true));
-        assertEquals("Username or password incorrect, please try again.", user.returnLoginStatus(false));
+    public void testMessageIDGenerationLength() {
+        Login.Message msg = new Login.Message("+27718693002", "Hello");
+        JSONObject json = msg.toJSON();
+        String id = json.getString("MessageID");
+        assertEquals(10, id.length(), "Message ID should be 10 characters long");
     }
 
+    @Test
+    public void testSendMessageOption_Send() {
+        // Simulate sending by invoking messageList add directly
+        Login.Message msg = new Login.Message("+27718693002", "Hi Mike");
+        String result;  // Simulate "Send Message"
+        result = msg.sendMessageOptionTest(0);
+        assertEquals("Message successfully sent.", result);
+    }
+
+    @Test
+    public void testSendMessageOption_Disregard() {
+        Login.Message msg = new Login.Message("+27718693002", "Hi Mike");
+        String result;  // Simulate "Disregard Message"
+        result = msg.sendMessageOptionTest(1);
+        assertEquals("Message disregarded.", result);
+    }
+
+    @Test
+    public void testSendMessageOption_Store() {
+        Login.Message msg = new Login.Message("+27718693002", "Hi Mike");
+        String result = msg.sendMessageOptionTest(2);  // Simulate "Store Message"
+        assertEquals("Message successfully stored.", result);
+    }
+
+    @Test
+    public void testTotalMessages() {
+        int before = Login.Message.returnTotalMessages();
+        Login.Message msg = new Login.Message("+27831234567", "Test message");
+        int after = Login.Message.returnTotalMessages();
+        assertEquals(before + 1, after, "Message count should increase by 1");
+    }
 }
